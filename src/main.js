@@ -100,7 +100,7 @@ async function initApp() {
         function renderHistory(items) {
             if (!elements.historyList) return;
             if (!items || !items.length) {
-                elements.historyList.innerHTML = '<div class="history-empty">鏆傛棤璁板綍</div>';
+                elements.historyList.innerHTML = '<div class="history-empty">暂无记录</div>';
                 return;
             }
             elements.historyList.innerHTML = items.map((item, idx) => `
@@ -550,4 +550,5 @@ if (document.readyState === 'loading') {
     // DOM宸插姞杞斤紝鐩存帴鎵ц
     initApp();
 }
+
 

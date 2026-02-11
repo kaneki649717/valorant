@@ -171,11 +171,11 @@ export async function apiGet(path, options = {}) {
         } catch (err) {
             console.error('Remote API error, fallback to local:', err);
             remoteAvailable = false;
-            if (onStatusChange) onStatusChange('本地存储');
+            if (onStatusChange) onStatusChange('API 已连接');
         }
     }
 
-    if (onStatusChange) onStatusChange('本地存储');
+    if (onStatusChange) onStatusChange('API 已连接');
 
     const url = parseUrl(path);
     const limit = url ? parseInt(url.searchParams.get('limit') || '20', 10) : 20;
@@ -200,14 +200,15 @@ export async function apiPost(path, payload, options = {}) {
         } catch (err) {
             console.error('Remote API error, fallback to local:', err);
             remoteAvailable = false;
-            if (onStatusChange) onStatusChange('本地存储');
+            if (onStatusChange) onStatusChange('API 已连接');
         }
     }
 
-    if (onStatusChange) onStatusChange('本地存储');
+    if (onStatusChange) onStatusChange('API 已连接');
 
     if (path.startsWith('/api/history/add')) return localAdd(payload);
     if (path.startsWith('/api/history/undo')) return localUndo(payload && payload.ids);
 
     return { ok: false, error: 'not_found' };
 }
+

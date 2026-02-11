@@ -42,7 +42,7 @@ if (!clientId) {
 export const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 export const lowDevice = (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4)
     || (navigator.deviceMemory && navigator.deviceMemory <= 4);
-export let lowPerf = !!(prefersReducedMotion || lowDevice);
+export let lowPerf = !!lowDevice;
 
 // 运行时性能探测
 export function probePerformance() {
@@ -74,3 +74,4 @@ export function probePerformance() {
         requestAnimationFrame(tick);
     });
 }
+

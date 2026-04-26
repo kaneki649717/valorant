@@ -2,7 +2,7 @@
   {"id": "SOC-01", "content": "爆照", "category": "social", "tags": ["现实"]},
   {"id": "SOC-02", "content": "唱歌 (不低于30s)", "category": "social", "tags": ["才艺"]},
   {"id": "SOC-03", "content": "使用技能的同时开房间麦念技能语音", "category": "social", "tags": ["中二"]},
-  {"id": "CON-01", "content": "宝宝契约：指定/或选择对局中队内的实时第一名为宝宝，提供情绪价值", "category": "contract", "tags": ["互动"]},
+  {"id": "CON-01", "content": "宝宝契约：指定单回合己方第一名为宝宝。杀人时叫“宝宝好枪”；死了叫“宝宝可惜”；只剩下第一名和自己时叫“宝宝救我”。提供情绪价值，除限定外自由发挥", "category": "contract", "tags": ["互动"]},
   {"id": "SOC-04", "content": "杀一个人念ID亲一口", "category": "social", "tags": ["羞耻"]},
   {"id": "TAC-01", "content": "空格与开火键互调 (半场)", "category": "tactical", "tags": ["键位"]},
   {"id": "TAC-02", "content": "AD键互调 (半场)", "category": "tactical", "tags": ["键位"]},
@@ -31,5 +31,10 @@
   {"id": "WEP-08", "content": "每杀一个人只能用被杀的人的武器", "category": "weaponry", "tags": ["挑战"]},
   {"id": "CON-02", "content": "主人契约 (队内异性)", "category": "contract", "tags": ["互动"]},
   {"id": "CON-03", "content": "小狗契约：下场游戏队友可以叫你小狗随意使唤", "category": "contract", "tags": ["羞耻"]},
-  {"id": "CON-04", "content": "爱情丘比特：绑定对面一人，TA死你也自杀", "category": "contract", "tags": ["玩法"]}
+  {"id": "CON-04", "content": "爱情丘比特：绑定对面一人，TA死你也自杀", "category": "contract", "tags": ["玩法"]},
+  {"id": "CON-05", "content": "小猫咪找主人：不准颗秒，只能打身体/脚；若颗秒，开麦说：“游戏ID，我是你的小猫咪，喵喵喵”（半场）", "category": "contract", "tags": ["互动", "半场"]},
+  {"id": "SOC-10", "content": "死亡奖励：被击杀时喊：“好枪，XX主人”（半场）", "category": "social", "tags": ["互动", "半场"]},
+  {"id": "CON-06", "content": "老奴人格：半场可使唤你发枪、报点等，每人可命令1次（半场）", "category": "contract", "tags": ["互动", "半场"]},
+  {"id": "SOC-11", "content": "每一次被击杀，叫对方游戏昵称并说：“XX哥哥、姐姐你好坏”（半场）", "category": "social", "tags": ["互动", "半场"]},
+  {"id": "TAC-12", "content": "123木头人：不许动，开局5秒后才可以从复活点出发", "category": "tactical", "tags": ["身法"]}
 ]

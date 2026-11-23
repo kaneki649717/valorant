@@ -435,6 +435,14 @@ effects_js = load_text("src/effects.js")
 store_js = load_text("src/core/Store.js")
 glitch_js = load_text("src/components/GlitchText.js")
 main_js = load_text("src/main.js")
+tracker_js = load_text("src/track/collector.js")
+
+# 访客采集配置：只暴露 anon key，数据库侧只放了 RPC 执行权限，没有表权限
+tracker_boot = (
+    "<script>window.__TRACK_CFG="
+    + json.dumps({"sb_url": SUPABASE_URL, "sb_key": SUPABASE_ANON_KEY}, ensure_ascii=False)
+    + ";</script>"
+)
 
 
 # 构建 JS 代码 - 使用更健壮的模块处理方式
@@ -606,7 +614,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 3. Build HTML - 不再暴露 Supabase 配置到前端
+# 3. Build HTML - 前端只拿到 anon key，用于调用 track_visit / track_leave 两个 RPC
 html_template = f"""
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -868,11 +876,15 @@ html_template = f"""
             resizeFrame();
         }})();
     </script>
+    {tracker_boot}
+    <script>
+{tracker_js}
+    </script>
 </body>
 </html>
 """
 
-# 替换模板变量 - 不再暴露 Supabase 密钥
+# 替换模板变量
 html_template = html_template.replace("{API_PORT}", str(ACTUAL_API_PORT))
 html_template = html_template.replace("{json_data_js}", json_data_js)
 

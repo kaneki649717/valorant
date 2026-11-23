@@ -17,12 +17,15 @@ _memory_store = {
 
 
 def _headers():
-    return {
+    h = {
         "apikey": SUPABASE_ANON_KEY,
-        "Authorization": f"Bearer {SUPABASE_ANON_KEY}",
         "Content-Type": "application/json",
         "Accept": "application/json",
     }
+    # 新版 sb_publishable_* 不是 JWT，塞进 Authorization 会被 PostgREST 拒绝
+    if SUPABASE_ANON_KEY.startswith("eyJ"):
+        h["Authorization"] = f"Bearer {SUPABASE_ANON_KEY}"
+    return h
 
 
 def _request(method, path, params=None, payload=None, count=None, prefer=None):

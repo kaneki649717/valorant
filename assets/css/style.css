@@ -755,9 +755,7 @@ html, body {
     100% { transform: translateX(-120vw); opacity: 0; }
 }
 
-.low-perf .datastream-layer {
-    display: none;
-}
+/* 低性能模式保留数据流，只是行数减少（由 effects.js 控制） */
 
 @keyframes ecgMove {
     0% { background-position: 0 0; }
@@ -916,7 +914,6 @@ html, body {
 }
 
 /* 低性能模式禁用复杂动画 */
-.low-perf .glyph-particle,
 .low-perf .glitch-char::before,
 .low-perf .decode-char::before {
     display: none;

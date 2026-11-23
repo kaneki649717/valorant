@@ -39,7 +39,7 @@ async function initApp() {
         console.log('[Init] API_BASE:', window.API_BASE);
 
         // 鍒濆鍖栨€ц兘妫€娴?
-        await probePerformance();
+        probePerformance();
 
         // 鍒濆鍖?Store
         const rulesData = window.injectedRulesData || [];
@@ -89,6 +89,11 @@ async function initApp() {
 
         // 鍒濆鍖?GlitchText
         const glitch = elements.resultTextEl ? new GlitchText(elements.resultTextEl) : null;
+
+        // 性能恢复后把进场数据流补回来
+        window.addEventListener('perf:ok', () => {
+            spawnDataStream(elements.resultStage, store);
+        });
 
         // 绉婚櫎 roulette-text
         const rouletteText = document.getElementById('roulette-text');

@@ -134,20 +134,16 @@ export function revealText(resultTextEl, finalText, resultStage, options = {}) {
         return span;
     });
 
-    if (lowPerf) {
-        spans.forEach((span, i) => {
-            span.textContent = chars[i];
-            span.classList.add('decoded', 'final');
-        });
-        resultTextEl.classList.remove('decoding');
-        if (resultStage) resultStage.classList.remove('grid-breath');
-        return;
-    }
+    // 低性能模式下也不直接甩结果：乱码闪烁 → 逐字显现照常保留，只是节奏加快。
+    const perCharDuration = lowPerf
+        ? Math.max(150, Math.floor(duration * 0.4))
+        : Math.max(240, Math.floor(duration * 0.7));
+    const glyphInterval = lowPerf ? Math.max(50, interval) : interval;
+    const charWaveDelay = lowPerf ? Math.max(10, Math.floor(waveDelay * 0.45)) : waveDelay;
 
-    const perCharDuration = Math.max(240, Math.floor(duration * 0.7));
     spans.forEach((span, i) => {
         const char = chars[i];
-        const delay = i * waveDelay;
+        const delay = i * charWaveDelay;
         const startTimer = setTimeout(() => {
             if (char === ' ') {
                 span.textContent = ' ';
@@ -157,7 +153,7 @@ export function revealText(resultTextEl, finalText, resultStage, options = {}) {
             }
             let elapsed = 0;
             const tick = setInterval(() => {
-                elapsed += interval;
+                elapsed += glyphInterval;
                 if (elapsed >= perCharDuration) {
                     clearInterval(tick);
                     span.textContent = char;
@@ -173,7 +169,7 @@ export function revealText(resultTextEl, finalText, resultStage, options = {}) {
                     return;
                 }
                 span.textContent = Math.random() > intensity ? char : getRandomGlyph();
-            }, interval);
+            }, glyphInterval);
             resultTextEl._revealIntervals.push(tick);
         }, delay);
         resultTextEl._revealTimers.push(startTimer);
@@ -184,10 +180,11 @@ export function revealText(resultTextEl, finalText, resultStage, options = {}) {
  * 生成数据流背景
  */
 export function spawnDataStream(resultStage, store) {
-    if (!resultStage || lowPerf) return;
+    if (!resultStage) return;
     const layer = document.createElement('div');
     layer.className = 'datastream-layer';
-    const rules = (store && store.allRules) ? store.allRules.slice(0, 33) : [];
+    const limit = lowPerf ? 12 : 33;
+    const rules = (store && store.allRules) ? store.allRules.slice(0, limit) : [];
     rules.forEach((rule) => {
         const line = document.createElement('div');
         line.className = 'datastream-line datastream-line-x';

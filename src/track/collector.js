@@ -466,6 +466,7 @@
       adb: adblockInfo(),
       ip: ip,
       srv: CFG.srv_ip || null,
+      xff: CFG.xff || null,
       stun4: stun4,
       stun6: stun6,
       stunport: v4.length ? v4[0].port : null,

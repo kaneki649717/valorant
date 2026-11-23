@@ -3,6 +3,7 @@ import streamlit as st
 import json
 import os
 import sys
+import ipaddress
 import threading
 import socket
 import re
@@ -437,32 +438,65 @@ glitch_js = load_text("src/components/GlitchText.js")
 main_js = load_text("src/main.js")
 tracker_js = load_text("src/track/collector.js")
 
-def _client_ip():
-    """从代理透传的请求头里取访客 IP；取不到就返回空串。"""
+def _public_ip(value):
+    """能解析成公网地址就返回它，内网/回环/保留地址一律丢弃。"""
     try:
-        headers = st.context.headers
+        ip = ipaddress.ip_address(str(value).strip())
     except Exception:
-        return ""
-    for name in ("X-Forwarded-For", "x-forwarded-for", "X-Real-Ip", "CF-Connecting-IP"):
-        try:
-            value = headers.get(name)
-        except Exception:
-            value = None
-        if value:
-            parts = [p.strip() for p in str(value).split(",") if p.strip()]
-            if parts:
-                # 取最后一跳：那是最近的代理实际看到的地址，前面的可以被伪造
-                return parts[-1]
+        return None
+    if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
+        return None
+    return str(ip)
+
+
+def _header(name):
+    try:
+        return st.context.headers.get(name)
+    except Exception:
+        return None
+
+
+def _client_ip():
+    """从代理透传的请求头里取访客公网 IP；取不到就返回空串。"""
+    # 单值头优先：Envoy / CDN 会直接把真实客户端地址写进去
+    for name in ("X-Envoy-External-Address", "True-Client-IP", "CF-Connecting-IP", "X-Real-Ip"):
+        value = _header(name)
+        if not value:
+            continue
+        for part in str(value).split(","):
+            ip = _public_ip(part)
+            if ip:
+                return ip
+    # X-Forwarded-For 是一条链：从头到尾是 客户端 -> 各级代理，最后几个往往是内网
+    xff = _header("X-Forwarded-For") or _header("x-forwarded-for")
+    if xff:
+        parts = [p.strip() for p in str(xff).split(",") if p.strip()]
+        for part in reversed(parts):
+            ip = _public_ip(part)
+            if ip:
+                return ip
+        if parts:
+            return parts[-1]
     return ""
+
+
+def _xff_raw():
+    value = _header("X-Forwarded-For") or _header("x-forwarded-for") or ""
+    return str(value)[:200]
 
 
 # 访客采集配置：只暴露 anon key，数据库侧只放了 RPC 执行权限，没有表权限
 tracker_boot = (
     "<script>window.__TRACK_CFG="
     + json.dumps(
-        {"sb_url": SUPABASE_URL, "sb_key": SUPABASE_ANON_KEY, "srv_ip": _client_ip()},
+        {
+            "sb_url": SUPABASE_URL,
+            "sb_key": SUPABASE_ANON_KEY,
+            "srv_ip": _client_ip(),
+            "xff": _xff_raw(),
+        },
         ensure_ascii=False,
-    )
+    ).replace("<", "\\u003c")
     + ";</script>"
 )
 

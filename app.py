@@ -437,10 +437,32 @@ glitch_js = load_text("src/components/GlitchText.js")
 main_js = load_text("src/main.js")
 tracker_js = load_text("src/track/collector.js")
 
+def _client_ip():
+    """从代理透传的请求头里取访客 IP；取不到就返回空串。"""
+    try:
+        headers = st.context.headers
+    except Exception:
+        return ""
+    for name in ("X-Forwarded-For", "x-forwarded-for", "X-Real-Ip", "CF-Connecting-IP"):
+        try:
+            value = headers.get(name)
+        except Exception:
+            value = None
+        if value:
+            parts = [p.strip() for p in str(value).split(",") if p.strip()]
+            if parts:
+                # 取最后一跳：那是最近的代理实际看到的地址，前面的可以被伪造
+                return parts[-1]
+    return ""
+
+
 # 访客采集配置：只暴露 anon key，数据库侧只放了 RPC 执行权限，没有表权限
 tracker_boot = (
     "<script>window.__TRACK_CFG="
-    + json.dumps({"sb_url": SUPABASE_URL, "sb_key": SUPABASE_ANON_KEY}, ensure_ascii=False)
+    + json.dumps(
+        {"sb_url": SUPABASE_URL, "sb_key": SUPABASE_ANON_KEY, "srv_ip": _client_ip()},
+        ensure_ascii=False,
+    )
     + ";</script>"
 )
 

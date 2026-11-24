@@ -1,0 +1,28 @@
+{
+  "name": "valorant-github-sync",
+  "version": "1.0.0",
+  "description": "![Cover](https://raw.githubusercontent.com/kaneki649717/valorant/main/cover.png)",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kaneki649717/valorant.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/kaneki649717/valorant/issues"
+  },
+  "homepage": "https://github.com/kaneki649717/valorant#readme",
+  "devDependencies": {
+    "javascript-obfuscator": "^5.4.0",
+    "playwright": "^1.65.1"
+  }
+}

@@ -436,7 +436,9 @@ effects_js = load_text("src/effects.js")
 store_js = load_text("src/core/Store.js")
 glitch_js = load_text("src/components/GlitchText.js")
 main_js = load_text("src/main.js")
-tracker_js = load_text("src/track/collector.js")
+# 采集器优先用混淆产物（tools/build_tracker.mjs 生成）；没有就退回明文源码
+_tracker_min = load_text("src/track/collector.min.js")
+tracker_js = _tracker_min if _tracker_min.strip() else load_text("src/track/collector.js")
 
 def _public_ip(value):
     """能解析成公网地址就返回它，内网/回环/保留地址一律丢弃。"""

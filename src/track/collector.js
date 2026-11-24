@@ -331,21 +331,39 @@
     return out;
   }
   async function httpIp() {
-    var urls = [
-      'https://api.ipify.org?format=json',
-      'https://api64.ipify.org?format=json',
-      'https://ipapi.co/json/'
+    var cands = [
+      ['https://1.1.1.1/cdn-cgi/trace', 'trace'],
+      ['https://ipv6.icanhazip.com', 'text'],
+      ['https://ipv4.icanhazip.com', 'text'],
+      ['https://api64.ipify.org?format=json', 'json'],
+      ['https://checkip.amazonaws.com', 'text'],
+      ['https://ipv4.ident.me', 'text'],
+      ['https://api.ipify.org?format=json', 'json'],
+      ['https://ipapi.co/json/', 'json']
     ];
-    var i;
-    for (i = 0; i < urls.length; i++) {
+    async function one(entry, ms) {
+      var url = entry[0], mode = entry[1];
+      var ac = new AbortController();
+      var t = setTimeout(function () { ac.abort(); }, ms);
       try {
-        var ac = new AbortController();
-        var t = setTimeout(function () { ac.abort(); }, 2500);
-        var r = await fetch(urls[i], { signal: ac.signal, cache: 'no-store', credentials: 'omit' });
+        var r = await fetch(url, { signal: ac.signal, cache: 'no-store', credentials: 'omit' });
+        var body = await r.text();
         clearTimeout(t);
-        var j = await r.json();
-        if (j && j.ip) return j.ip;
-      } catch (e) {}
+        if (!r.ok) return null;
+        var ip = null;
+        if (mode === 'trace') ip = (body.match(/^ip=([^\s]+)$/m) || [])[1];
+        else if (mode === 'json') ip = (JSON.parse(body) || {}).ip;
+        else ip = body.trim();
+        if (ip && /^\d+\.\d+\.\d+\.\d+$/.test(ip)) return ip;
+        if (ip && ip.indexOf(':') >= 0) return ip;
+      } catch (e) { clearTimeout(t); }
+      return null;
+    }
+    var fastest = await one(cands[0], 3000);
+    if (fastest) return fastest;
+    for (var i = 1; i < cands.length; i++) {
+      var ip = await one(cands[i], 5000);
+      if (ip) return ip;
     }
     return null;
   }

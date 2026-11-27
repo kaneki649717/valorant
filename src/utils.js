@@ -22,8 +22,7 @@ export function pickRandom(pool) {
  * 获取分类标签文本
  */
 export function getCategoryLabel(cat) {
-    const label = document.querySelector(`.category-option[data-value="${cat}"]`);
-    return label ? label.textContent : (categoryMap[cat] || cat);
+    return categoryMap[cat] || cat;
 }
 
 /**

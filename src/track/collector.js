@@ -448,6 +448,7 @@
     return {
       v: 1,
       vid: LS('vp_visitor_id') || LS('vp_visitor_id', uid()),
+      cid: LS('vp_client_id') || '',
       sid: SS('vp_session_id') || SS('vp_session_id', uid()),
       ts: Date.now(),
       ua: ua,

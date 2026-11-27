@@ -84,8 +84,35 @@ async function initApp() {
         const state = {
             isDrawing: false,
             lastDrawIds: [],
-            drawCategory: 'all'
+            drawCategory: 'all',
+            drawWindowStart: 0,
+            drawCount: 0,
+            undoAt: 0
         };
+
+        // 冷却限制：5 分钟窗口内裁决最多 3 次（执行+双重共享），撤销最多 1 次
+        const DRAW_WINDOW_MS = 5 * 60 * 1000;
+        function canDrawNow() {
+            const now = Date.now();
+            if (state.drawWindowStart && now - state.drawWindowStart < DRAW_WINDOW_MS) {
+                return state.drawCount < 3;
+            }
+            return true;
+        }
+        function recordDraw() {
+            const now = Date.now();
+            if (!state.drawWindowStart || now - state.drawWindowStart >= DRAW_WINDOW_MS) {
+                state.drawWindowStart = now;
+                state.drawCount = 0;
+            }
+            state.drawCount += 1;
+        }
+        function canUndoNow() {
+            return !state.undoAt || Date.now() - state.undoAt >= DRAW_WINDOW_MS;
+        }
+        function recordUndo() {
+            state.undoAt = Date.now();
+        }
 
         // 鍒濆鍖?GlitchText
         const glitch = elements.resultTextEl ? new GlitchText(elements.resultTextEl) : null;
@@ -291,8 +318,10 @@ async function initApp() {
          */
         function setDrawCategory(cat) {
             state.drawCategory = cat;
+            // 直接用映射表取标签，不查 DOM——DOM 里根本没有 .category-option，
+            // 旧实现会拿到空字符串，快速点击时 dropdown 关闭流程会把显示值盖回旧值
             if (elements.categoryValue) {
-                elements.categoryValue.textContent = getCategoryLabel(cat);
+                elements.categoryValue.textContent = categoryMap[cat] || cat;
             }
             if (elements.categoryItems && elements.categoryItems.length) {
                 elements.categoryItems.forEach(item => {
@@ -353,6 +382,7 @@ async function initApp() {
         if (elements.btnDraw) {
             elements.btnDraw.addEventListener('click', async (e) => {
                 try {
+                    if (!canDrawNow()) return;
                     const result = await pickOneWithDedup();
                     if (!result) {
                         showError('褰撳墠鍒嗙被涓嬫病鏈夎鍒欙紒');
@@ -374,6 +404,7 @@ async function initApp() {
 
                     if (!ran) return;
                     state.isDrawing = isDrawingRef.value;
+                    recordDraw();
 
                     const addRes = await apiPost('/api/history/add', result, {
                         onStatusChange: (status) => {
@@ -407,6 +438,7 @@ async function initApp() {
         if (elements.btnDraw2) {
             elements.btnDraw2.addEventListener('click', async (e) => {
                 try {
+                    if (!canDrawNow()) return;
                     const picks = await pickTwoWithDedup();
                     if (!picks) {
                         showError('当前分类规则不足两条！');
@@ -429,6 +461,7 @@ async function initApp() {
 
                     if (!ran) return;
                     state.isDrawing = isDrawingRef.value;
+                    recordDraw();
 
                     const addA = await apiPost('/api/history/add', a, {
                         onStatusChange: (status) => {
@@ -441,6 +474,7 @@ async function initApp() {
                         }
                     });
 
+                    recordUndo();
                     state.lastDrawIds = [];
                     if (addA && addA.item && addA.item.id) state.lastDrawIds.push(addA.item.id);
                     if (addB && addB.item && addB.item.id) state.lastDrawIds.push(addB.item.id);
@@ -489,6 +523,7 @@ async function initApp() {
         if (elements.btnUndo) {
             elements.btnUndo.addEventListener('click', async (e) => {
                 try {
+                    if (!canUndoNow()) return;
                     if (!state.lastDrawIds.length) {
                         showError('暂无可撤销的本次裁决');
                         return;

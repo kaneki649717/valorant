@@ -57,6 +57,39 @@ function loadHistory() {
     }
 }
 
+// 把线上改造前存在 localStorage 的老记录搬进数据库。
+// 只搬一次：搬完把 key 改名，下次不再触发。
+const MIGRATED_KEY = `${LOCAL_HISTORY_KEY}__migrated`;
+let migrationStarted = false;
+
+async function migrateLocalHistory() {
+    if (migrationStarted) return;
+    migrationStarted = true;
+    if (!rpcAvailable() || !rpcConfig()) return;
+    if (!loadHistory().length) return;
+    if (localStorage.getItem(MIGRATED_KEY)) return;
+    try {
+        const items = loadHistory();
+        for (const it of items) {
+            if (!it || !it.rule_id) continue;
+            await rpcCall('draw_add', {
+                p: {
+                    cid: clientId,
+                    rule_id: it.rule_id,
+                    content: it.content,
+                    category: it.category,
+                },
+            });
+        }
+        localStorage.setItem(MIGRATED_KEY, String(items.length));
+        localStorage.removeItem(LOCAL_HISTORY_KEY);
+        console.log(`[migrate] moved ${items.length} local history rows to Supabase`);
+    } catch (err) {
+        console.error('[migrate] failed, will retry next load:', err);
+        migrationStarted = false;
+    }
+}
+
 function saveHistory(items) {
     try {
         localStorage.setItem(LOCAL_HISTORY_KEY, JSON.stringify(items));
@@ -200,6 +233,7 @@ export async function apiGet(path, options = {}) {
     // 线上：先走 Supabase RPC
     if (rpcAvailable() && rpcConfig()) {
         try {
+            migrateLocalHistory();
             const url0 = parseUrl(path);
             const limit0 = url0 ? parseInt(url0.searchParams.get('limit') || '20', 10) : 20;
             if (path.startsWith('/api/history/list')) {

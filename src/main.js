@@ -224,17 +224,28 @@ async function initApp() {
             await updateStats();
         }
 
-        /**
-         * 鑾峰彇鏈€杩戞娊鍙栫殑瑙勫垯 ID锛堢敤浜庡幓閲嶏級
-         */
-        async function getRecentIds() {
+        // 最近抽过的规则 ID 缓存：网络请求放后台刷，点击时不等它
+        let recentIdsCache = [];
+        let recentIdsLoaded = false;
+        let recentIdsInflight = null;
+        async function fetchRecentIds() {
             try {
                 const data = await apiGet('/api/history/recent?limit=10');
-                return data && data.ids ? data.ids : [];
+                if (data && data.ids) {
+                    recentIdsCache = data.ids;
+                    recentIdsLoaded = true;
+                }
             } catch (err) {
-                console.error('鑾峰彇鏈€杩慖D澶辫触:', err);
-                return [];
+                console.error('获取最近ID失败:', err);
             }
+            recentIdsInflight = null;
+        }
+        function refreshRecentIds() {
+            if (!recentIdsInflight) recentIdsInflight = fetchRecentIds();
+            return recentIdsInflight;
+        }
+        function getRecentIds() {
+            return recentIdsCache;
         }
 
         /**
@@ -252,7 +263,7 @@ async function initApp() {
             const pool = getDrawPool();
             if (!pool.length) return null;
             try {
-                const recentIds = await getRecentIds();
+                const recentIds = getRecentIds();
                 const filtered = pool.filter(r => !recentIds.includes(r.id));
                 const pickPool = filtered.length ? filtered : pool;
                 return pickRandom(pickPool);
@@ -270,7 +281,7 @@ async function initApp() {
             const pool = getDrawPool();
             if (pool.length < 2) return null;
             try {
-                const recentIds = await getRecentIds();
+                const recentIds = getRecentIds();
                 const filtered = pool.filter(r => !recentIds.includes(r.id));
                 const pickPool = filtered.length >= 2 ? filtered : pool;
                 
@@ -465,6 +476,7 @@ async function initApp() {
                             : [];
                     }
 
+                    refreshRecentIds();
                     await updatePanels();
                     triggerGlow(e.currentTarget);
                     triggerSuccess(e.currentTarget);
@@ -529,6 +541,7 @@ async function initApp() {
                         }
                     }
 
+                    refreshRecentIds();
                     await updatePanels();
                     triggerGlow(e.currentTarget);
                     triggerSuccess(e.currentTarget);
@@ -611,6 +624,7 @@ async function initApp() {
         console.log('[Init] 寮€濮嬭缃垵濮嬬姸鎬?..');
         setDrawCategory('all');
         loadCooldown();
+        refreshRecentIds();
         setListCategory('all');
         console.log('[Init] 鍒濆鐘舵€佽缃畬鎴愶紝寮€濮嬫覆鏌撳垪琛?..');
         renderList(); // 鐩存帴璋冪敤娓叉煋锛屼笉绛夊緟API

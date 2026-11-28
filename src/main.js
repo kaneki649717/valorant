@@ -493,32 +493,42 @@ async function initApp() {
                     state.isDrawing = isDrawingRef.value;
                     recordDraw();
 
-                    const addRes = await apiPost('/api/history/add', result, {
-                        onStatusChange: (status) => {
-                            if (elements.historyStatus) elements.historyStatus.textContent = status;
-                        }
-                    });
-
-                    if (addRes && addRes.item && addRes.item.id) {
-                        state.lastDrawIds = [addRes.item.id];
-                    } else {
-                        const latest = await apiGet('/api/history/list?limit=1');
-                        state.lastDrawIds = (latest && latest.items && latest.items[0] && latest.items[0].id)
-                            ? [latest.items[0].id]
-                            : [];
-                    }
-
-                    refreshRecentIds();
-                    // 立刻用本地数据更新面板并弹提示，不等 RPC
-                    if (addRes && addRes.item) {
-                        localHistoryCache = [addRes.item, ...localHistoryCache.filter((r) => r.id !== addRes.item.id)];
-                        try { localStorage.setItem(`vp_history_${clientId}`, JSON.stringify(localHistoryCache)); } catch (e2) {}
-                        paintPanelsFromCache();
-                    }
+                    // 先用临时记录立刻更新面板 + 弹提示，不等 RPC
+                    const tempId = 'tmp_' + Date.now();
+                    const pendingItem = {
+                        id: tempId,
+                        rule_id: result.id,
+                        content: result.content,
+                        category: result.category,
+                        timestamp: new Date().toISOString(),
+                        client_id: clientId,
+                    };
+                    localHistoryCache = [pendingItem, ...localHistoryCache];
+                    try { localStorage.setItem(`vp_history_${clientId}`, JSON.stringify(localHistoryCache)); } catch (e2) {}
+                    paintPanelsFromCache();
                     triggerGlow(e.currentTarget);
                     triggerSuccess(e.currentTarget);
                     showSuccess('裁决已记录');
-                    updatePanels().catch(() => {});
+                    state.lastDrawIds = [tempId];
+
+                    // RPC 后台写，回来后用真实 id 替换临时记录
+                    apiPost('/api/history/add', result, {
+                        onStatusChange: (status) => {
+                            if (elements.historyStatus) elements.historyStatus.textContent = status;
+                        }
+                    }).then((addRes) => {
+                        const realId = addRes && addRes.item && addRes.item.id;
+                        if (realId) {
+                            const idx = localHistoryCache.findIndex((r) => r.id === tempId);
+                            if (idx >= 0) localHistoryCache[idx].id = realId;
+                            try { localStorage.setItem(`vp_history_${clientId}`, JSON.stringify(localHistoryCache)); } catch (e2) {}
+                            if (state.lastDrawIds[0] === tempId) state.lastDrawIds = [realId];
+                        }
+                        refreshRecentIds();
+                        updatePanels().catch(() => {});
+                    }).catch((err) => {
+                        console.error('写入失败:', err);
+                    });
                 } catch (err) {
                     console.error('鎵ц瑁佸喅澶辫触:', err);
                     showError('鎵ц瑁佸喅澶辫触锛岃閲嶈瘯');
@@ -623,22 +633,13 @@ async function initApp() {
                         return;
                     }
 
-                    const res = await apiPost('/api/history/undo', { ids: state.lastDrawIds }, {
-                        onStatusChange: (status) => {
-                            if (elements.historyStatus) elements.historyStatus.textContent = status;
-                        }
-                    });
-
-                    if (!res || !res.ok) {
-                        showError('鎾ら攢澶辫触锛岃閲嶈瘯');
-                        return;
-                    }
-
                     recordUndo();
                     const undoneIds = state.lastDrawIds.slice();
                     state.lastDrawIds = [];
 
-                    // 立刻从本地缓存删掉并重绘，不等 RPC
+                    // 立刻从本地缓存删掉并重绘 + 弹提示，不等 RPC
+                    const realIds = undoneIds.filter((x) => typeof x === 'number');
+                    const undoForDb = realIds.length ? realIds : null;
                     localHistoryCache = localHistoryCache.filter((r) => !undoneIds.includes(r.id));
                     try { localStorage.setItem(`vp_history_${clientId}`, JSON.stringify(localHistoryCache)); } catch (e2) {}
                     if (localHistoryCache.length) {
@@ -653,7 +654,18 @@ async function initApp() {
                     triggerGlow(e.currentTarget);
                     triggerSuccess(e.currentTarget);
                     showSuccess('已撤销本次裁决');
-                    updatePanels().catch(() => {});
+
+                    // RPC 后台删；临时 id 说明还没写进库，删最新一条兜底
+                    apiPost('/api/history/undo', { ids: undoForDb }, {
+                        onStatusChange: (status) => {
+                            if (elements.historyStatus) elements.historyStatus.textContent = status;
+                        }
+                    }).then(() => {
+                        refreshRecentIds();
+                        updatePanels().catch(() => {});
+                    }).catch((err) => {
+                        console.error('撤销失败:', err);
+                    });
                 } catch (err) {
                     console.error('鎾ら攢澶辫触:', err);
                     showError('鎾ら攢澶辫触锛岃閲嶈瘯');

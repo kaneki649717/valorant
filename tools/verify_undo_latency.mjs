@@ -41,18 +41,25 @@ for (let i = 0; i < 60 && !F; i++) {
 }
 await page.waitForTimeout(8000);
 
-// ---- 裁决：从点击到小绿框出现 ----
+// ---- 裁决：动画结束后到小绿框出现（动画本身固定 ~2.2s，不算在延迟里） ----
 await F.locator("#btn-draw").click({ force: true });
 const clickAt = Date.now();
+// 等动画结束：按钮重新可用
+for (let i = 0; i < 100; i++) {
+  await page.waitForTimeout(50);
+  const disabled = await F.locator("#btn-draw").isDisabled();
+  if (!disabled) break;
+}
+const animDoneAt = Date.now();
 let toastAt = 0;
 let rowAt = 0;
 for (let i = 0; i < 100; i++) {
   await page.waitForTimeout(50);
-  if (!toastAt && await F.locator(".success-toast").count()) toastAt = Date.now() - clickAt;
-  if (!rowAt && (await F.locator("#history-list .history-row").count()) > 0) rowAt = Date.now() - clickAt;
+  if (!toastAt && await F.locator(".success-toast").count()) toastAt = Date.now() - animDoneAt;
+  if (!rowAt && (await F.locator("#history-list .history-row").count()) > 0) rowAt = Date.now() - animDoneAt;
   if (toastAt && rowAt) break;
 }
-console.log(`裁决: 点击→记录出现 ${rowAt}ms, 点击→绿框 ${toastAt}ms`);
+console.log(`裁决: 动画耗时 ${animDoneAt - clickAt}ms, 动画结束→记录 ${rowAt}ms, 动画结束→绿框 ${toastAt}ms`);
 
 // ---- 撤销：从点击到小绿框出现 ----
 await page.waitForTimeout(1500);
@@ -69,7 +76,7 @@ for (let i = 0; i < 100; i++) {
 }
 console.log(`撤销: 点击→记录消失 ${uRowAt}ms, 点击→绿框 ${uToastAt}ms`);
 
-const okDraw = toastAt > 0 && toastAt < 1500;
+const okDraw = toastAt >= 0 && toastAt < 800;
 const okUndo = uToastAt > 0 && uToastAt < 1500;
 console.log(`${okDraw ? "PASS" : "FAIL"}  裁决提示及时 (${toastAt}ms)`);
 console.log(`${okUndo ? "PASS" : "FAIL"}  撤销提示及时 (${uToastAt}ms)`);

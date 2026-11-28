@@ -220,9 +220,40 @@ async function initApp() {
         /**
          * 鏇存柊鎵€鏈夐潰鏉?
          */
-        async function updatePanels() {
-            await updateHistory();
-            await updateStats();
+        // 并发刷新，不串行等待
+        function updatePanels() {
+            return Promise.all([updateHistory(), updateStats()]);
+        }
+
+        // 本地缓存：点击后立刻用本地数据更新面板，不等 RPC
+        let localHistoryCache = [];
+        function loadLocalCache() {
+            try {
+                const raw = localStorage.getItem(`vp_history_${clientId}`);
+                const arr = raw ? JSON.parse(raw) : [];
+                localHistoryCache = Array.isArray(arr) ? arr.slice().sort((a, b) => (b.id || 0) - (a.id || 0)) : [];
+            } catch (e) {
+                localHistoryCache = [];
+            }
+        }
+        function paintPanelsFromCache() {
+            if (!localHistoryCache.length) return false;
+            renderHistory(localHistoryCache.slice(0, 8));
+            const byCategory = {};
+            let todayCount = 0;
+            const today = new Date().toISOString().slice(0, 10);
+            localHistoryCache.forEach((it) => {
+                if (it.timestamp && it.timestamp.startsWith(today)) todayCount += 1;
+                if (it.category) byCategory[it.category] = (byCategory[it.category] || 0) + 1;
+            });
+            if (elements.statsToday) elements.statsToday.textContent = `今日裁决: ${todayCount} 次`;
+            const total = Object.values(byCategory).reduce((a, b) => a + b, 0);
+            if (total > 0 && elements.statsTop) {
+                const topCat = Object.keys(byCategory).sort((a, b) => byCategory[b] - byCategory[a])[0];
+                const pct = Math.round((byCategory[topCat] / total) * 100);
+                elements.statsTop.textContent = `最常出现: ${categoryMap[topCat] || topCat} (${pct}%)`;
+            }
+            return true;
         }
 
         // 最近抽过的规则 ID 缓存：网络请求放后台刷，点击时不等它
@@ -478,10 +509,16 @@ async function initApp() {
                     }
 
                     refreshRecentIds();
-                    await updatePanels();
+                    // 立刻用本地数据更新面板并弹提示，不等 RPC
+                    if (addRes && addRes.item) {
+                        localHistoryCache = [addRes.item, ...localHistoryCache.filter((r) => r.id !== addRes.item.id)];
+                        try { localStorage.setItem(`vp_history_${clientId}`, JSON.stringify(localHistoryCache)); } catch (e2) {}
+                        paintPanelsFromCache();
+                    }
                     triggerGlow(e.currentTarget);
                     triggerSuccess(e.currentTarget);
                     showSuccess('裁决已记录');
+                    updatePanels().catch(() => {});
                 } catch (err) {
                     console.error('鎵ц瑁佸喅澶辫触:', err);
                     showError('鎵ц瑁佸喅澶辫触锛岃閲嶈瘯');
@@ -598,22 +635,25 @@ async function initApp() {
                     }
 
                     recordUndo();
+                    const undoneIds = state.lastDrawIds.slice();
                     state.lastDrawIds = [];
-                    await updatePanels();
 
-                    const latest = await apiGet('/api/history/list?limit=1');
-                    if (latest && latest.items && latest.items.length) {
-                        const item = latest.items[0];
-                        elements.categoryLabel.innerText = `Protocol: ${item.category.toUpperCase()} // ${item.rule_id}`;
-                        revealText(elements.resultTextEl, item.content, elements.resultStage);
+                    // 立刻从本地缓存删掉并重绘，不等 RPC
+                    localHistoryCache = localHistoryCache.filter((r) => !undoneIds.includes(r.id));
+                    try { localStorage.setItem(`vp_history_${clientId}`, JSON.stringify(localHistoryCache)); } catch (e2) {}
+                    if (localHistoryCache.length) {
+                        paintPanelsFromCache();
+                        const top = localHistoryCache[0];
+                        elements.categoryLabel.innerText = `Protocol: ${String(top.category || '').toUpperCase()} // ${top.rule_id}`;
+                        revealText(elements.resultTextEl, top.content, elements.resultStage);
                     } else {
                         elements.categoryLabel.innerText = 'SYSTEM READY';
-                        revealText(elements.resultTextEl, '绛夊緟鎸囦护', elements.resultStage);
+                        revealText(elements.resultTextEl, '等待指令', elements.resultStage);
                     }
-
                     triggerGlow(e.currentTarget);
                     triggerSuccess(e.currentTarget);
                     showSuccess('已撤销本次裁决');
+                    updatePanels().catch(() => {});
                 } catch (err) {
                     console.error('鎾ら攢澶辫触:', err);
                     showError('鎾ら攢澶辫触锛岃閲嶈瘯');
@@ -631,15 +671,8 @@ async function initApp() {
         renderList(); // 直接调用渲染，不等待API
 
         // 首屏先用 localStorage 缓存渲染，不等网络
-        try {
-            const cachedRaw = localStorage.getItem(`vp_history_${clientId}`);
-            if (cachedRaw) {
-                const cached = JSON.parse(cachedRaw);
-                if (Array.isArray(cached) && cached.length) {
-                    renderHistory(cached.slice().sort((a, b) => (b.id || 0) - (a.id || 0)).slice(0, 8));
-                }
-            }
-        } catch (e) {}
+        loadLocalCache();
+        paintPanelsFromCache();
         // 进场动画不等网络：先出效果，面板数据后台补
         spawnDataStream(elements.resultStage, store);
 

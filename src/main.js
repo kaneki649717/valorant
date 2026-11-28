@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 涓诲叆鍙ｆ枃浠?- 绠€鍖栫増
  * 妯″潡鍖栭噸鏋勫悗鐨勪富绋嬪簭
  */
@@ -92,6 +92,26 @@ async function initApp() {
 
         // 冷却限制：5 分钟窗口内裁决最多 3 次（执行+双重共享），撤销最多 1 次
         const DRAW_WINDOW_MS = 5 * 60 * 1000;
+        // 冷却状态持久化：刷新页面不能重置 CD
+        function loadCooldown() {
+            try {
+                const raw = localStorage.getItem('vp_cooldown');
+                if (!raw) return;
+                const cd = JSON.parse(raw);
+                state.drawWindowStart = cd.drawWindowStart || 0;
+                state.drawCount = cd.drawCount || 0;
+                state.undoAt = cd.undoAt || 0;
+            } catch (e) {}
+        }
+        function saveCooldown() {
+            try {
+                localStorage.setItem('vp_cooldown', JSON.stringify({
+                    drawWindowStart: state.drawWindowStart,
+                    drawCount: state.drawCount,
+                    undoAt: state.undoAt
+                }));
+            } catch (e) {}
+        }
         function canDrawNow() {
             const now = Date.now();
             if (state.drawWindowStart && now - state.drawWindowStart < DRAW_WINDOW_MS) {
@@ -106,12 +126,14 @@ async function initApp() {
                 state.drawCount = 0;
             }
             state.drawCount += 1;
+            saveCooldown();
         }
         function canUndoNow() {
             return !state.undoAt || Date.now() - state.undoAt >= DRAW_WINDOW_MS;
         }
         function recordUndo() {
             state.undoAt = Date.now();
+            saveCooldown();
         }
 
         // 鍒濆鍖?GlitchText
@@ -352,29 +374,51 @@ async function initApp() {
             });
         });
 
-        if (elements.categoryTrigger && elements.categoryDropdown) {
-            elements.categoryTrigger.addEventListener('click', (e) => {
-                e.stopPropagation();
-                elements.categoryDropdown.classList.toggle('open');
-            });
-        }
 
         if (elements.categoryItems && elements.categoryItems.length) {
             elements.categoryItems.forEach(item => {
-                item.addEventListener('click', () => {
+                item.addEventListener('click', (e) => {
+                    e.stopPropagation();
                     setDrawCategory(item.dataset.value);
-                    if (elements.categoryDropdown) {
-                        elements.categoryDropdown.classList.remove('open');
-                    }
+                    closeDropdown();
                 });
             });
         }
 
+        // 关闭菜单时加一道保险：关闭后的 300ms 内，落在菜单旧位置上的点击一律吞掉，
+        // 否则淡出动画期间的误触会点到下面的"执行裁决"。
+        let dropdownGuardUntil = 0;
+        function closeDropdown() {
+            if (!elements.categoryDropdown || !elements.categoryDropdown.classList.contains('open')) return;
+            elements.categoryDropdown.classList.remove('open');
+            dropdownGuardUntil = Date.now() + 300;
+        }
+
         document.addEventListener('click', (e) => {
             if (elements.categoryDropdown && !elements.categoryDropdown.contains(e.target)) {
-                elements.categoryDropdown.classList.remove('open');
+                closeDropdown();
             }
-        });
+        }, true);
+
+        document.addEventListener('click', (e) => {
+            if (Date.now() < dropdownGuardUntil && elements.categoryDropdown &&
+                !elements.categoryDropdown.contains(e.target) &&
+                elements.btnDraw && elements.btnDraw.contains(e.target)) {
+                e.stopPropagation();
+                e.preventDefault();
+            }
+        }, true);
+
+        if (elements.categoryTrigger && elements.categoryDropdown) {
+            elements.categoryTrigger.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (elements.categoryDropdown.classList.contains('open')) {
+                    closeDropdown();
+                } else {
+                    elements.categoryDropdown.classList.add('open');
+                }
+            });
+        }
 
         document.querySelectorAll('.btn-draw, .filter-btn, .category-dropdown-trigger').forEach(attachRipple);
 
@@ -474,7 +518,6 @@ async function initApp() {
                         }
                     });
 
-                    recordUndo();
                     state.lastDrawIds = [];
                     if (addA && addA.item && addA.item.id) state.lastDrawIds.push(addA.item.id);
                     if (addB && addB.item && addB.item.id) state.lastDrawIds.push(addB.item.id);
@@ -540,6 +583,7 @@ async function initApp() {
                         return;
                     }
 
+                    recordUndo();
                     state.lastDrawIds = [];
                     await updatePanels();
 
@@ -566,6 +610,7 @@ async function initApp() {
         // 鍒濆鍖?
         console.log('[Init] 寮€濮嬭缃垵濮嬬姸鎬?..');
         setDrawCategory('all');
+        loadCooldown();
         setListCategory('all');
         console.log('[Init] 鍒濆鐘舵€佽缃畬鎴愶紝寮€濮嬫覆鏌撳垪琛?..');
         renderList(); // 鐩存帴璋冪敤娓叉煋锛屼笉绛夊緟API

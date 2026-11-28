@@ -138,7 +138,8 @@ html, body {
     opacity: 0;
     visibility: hidden;
     transform: translateY(-10px) scale(0.95);
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    pointer-events: none;
+    transition: opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1), transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.25s;
     box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 30px rgba(120, 200, 255, 0.1);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
@@ -147,6 +148,7 @@ html, body {
 .category-dropdown.open .category-dropdown-menu {
     opacity: 1;
     visibility: visible;
+    pointer-events: auto;
     transform: translateY(0) scale(1);
 }
 
@@ -197,7 +199,7 @@ html, body {
 
 .category-dropdown-trigger.is-busy {
     opacity: 0.7;
-    cursor: wait;
+    cursor: pointer;
     pointer-events: none;
 }
 
@@ -262,7 +264,7 @@ html, body {
 
 .filter-btn.is-busy {
     opacity: 0.6;
-    cursor: wait;
+    cursor: pointer;
     pointer-events: none;
 }
 
@@ -434,7 +436,7 @@ html, body {
 .btn-draw:active { animation-play-state: paused; }
 
 .btn-draw.is-busy {
-    cursor: wait;
+    cursor: pointer;
     opacity: 0.7;
     filter: saturate(0.85);
     animation-play-state: paused;

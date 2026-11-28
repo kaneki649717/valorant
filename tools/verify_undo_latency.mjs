@@ -64,17 +64,33 @@ console.log(`裁决: 动画耗时 ${animDoneAt - clickAt}ms, 动画结束→记�
 // ---- 撤销：从点击到小绿框出现 ----
 await page.waitForTimeout(1500);
 const rowsBefore = await F.locator("#history-list .history-row").count();
+const dbgBefore = await F.evaluate(() => ({
+  cache: localStorage.getItem("vp_history_" + localStorage.getItem("vp_client_id")),
+  rows: document.querySelectorAll("#history-list .history-row").length,
+}));
+console.log("  [dbg] cache before undo:", (dbgBefore.cache || "").slice(0, 200));
 await F.locator("#btn-undo").click({ force: true });
 const uClick = Date.now();
 let uToastAt = 0;
 let uRowAt = 0;
+let dbgAfter = null;
 for (let i = 0; i < 100; i++) {
   await page.waitForTimeout(50);
   if (!uToastAt && await F.locator(".success-toast").count()) uToastAt = Date.now() - uClick;
-  if (!uRowAt && (await F.locator("#history-list .history-row").count()) < rowsBefore) uRowAt = Date.now() - uClick;
+  if (!uRowAt) {
+    const now = await F.locator("#history-list .history-row").count();
+    if (now < rowsBefore) {
+      uRowAt = Date.now() - uClick;
+      dbgAfter = await F.evaluate(() => ({
+        cache: localStorage.getItem("vp_history_" + localStorage.getItem("vp_client_id")),
+        rows: document.querySelectorAll("#history-list .history-row").length,
+      }));
+    }
+  }
   if (uToastAt && uRowAt) break;
 }
 console.log(`撤销: 点击→记录消失 ${uRowAt}ms, 点击→绿框 ${uToastAt}ms`);
+console.log("  [dbg] cache after undo:", ((dbgAfter && dbgAfter.cache) || "").slice(0, 200));
 
 const okDraw = toastAt >= 0 && toastAt < 800;
 const okUndo = uToastAt > 0 && uToastAt < 1500;

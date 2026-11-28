@@ -237,7 +237,13 @@ async function initApp() {
             }
         }
         function paintPanelsFromCache() {
-            if (!localHistoryCache.length) return false;
+            if (!localHistoryCache.length) {
+                // 缓存空了也要重绘，否则被删掉的那条还留在 DOM 上
+                renderHistory([]);
+                if (elements.statsToday) elements.statsToday.textContent = '今日裁决: 0 次';
+                if (elements.statsTop) elements.statsTop.textContent = '最常出现: —';
+                return false;
+            }
             renderHistory(localHistoryCache.slice(0, 8));
             const byCategory = {};
             let todayCount = 0;
@@ -648,6 +654,7 @@ async function initApp() {
                         elements.categoryLabel.innerText = `Protocol: ${String(top.category || '').toUpperCase()} // ${top.rule_id}`;
                         revealText(elements.resultTextEl, top.content, elements.resultStage);
                     } else {
+                        paintPanelsFromCache();
                         elements.categoryLabel.innerText = 'SYSTEM READY';
                         revealText(elements.resultTextEl, '等待指令', elements.resultStage);
                     }

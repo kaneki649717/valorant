@@ -58,36 +58,50 @@ function loadHistory() {
 }
 
 // 把线上改造前存在 localStorage 的老记录搬进数据库。
-// 只搬一次：搬完把 key 改名，下次不再触发。
+// 幂等：用「已迁移到第几条」的游标，中断重试不会重复写。
 const MIGRATED_KEY = `${LOCAL_HISTORY_KEY}__migrated`;
-let migrationStarted = false;
+let migrationPromise = null;
 
 async function migrateLocalHistory() {
-    if (migrationStarted) return;
-    migrationStarted = true;
-    if (!rpcAvailable() || !rpcConfig()) return;
-    if (!loadHistory().length) return;
-    if (localStorage.getItem(MIGRATED_KEY)) return;
-    try {
-        const items = loadHistory();
-        for (const it of items) {
-            if (!it || !it.rule_id) continue;
-            await rpcCall('draw_add', {
-                p: {
-                    cid: clientId,
-                    rule_id: it.rule_id,
-                    content: it.content,
-                    category: it.category,
-                },
-            });
+    if (migrationPromise) return migrationPromise;
+    migrationPromise = (async () => {
+        try {
+            if (!rpcAvailable() || !rpcConfig()) return;
+            const items = loadHistory();
+            if (!items.length) {
+                localStorage.setItem(MIGRATED_KEY, '0');
+                return;
+            }
+            if (localStorage.getItem(MIGRATED_KEY) !== null) return;
+
+            const cursorKey = `${MIGRATED_KEY}__cursor`;
+            let cursor = parseInt(localStorage.getItem(cursorKey) || '0', 10);
+            if (!Number.isFinite(cursor) || cursor < 0) cursor = 0;
+
+            for (; cursor < items.length; cursor++) {
+                const it = items[cursor];
+                if (it && it.rule_id) {
+                    await rpcCall('draw_add', {
+                        p: {
+                            cid: clientId,
+                            rule_id: it.rule_id,
+                            content: it.content,
+                            category: it.category,
+                        },
+                    });
+                }
+                localStorage.setItem(cursorKey, String(cursor + 1));
+            }
+
+            localStorage.setItem(MIGRATED_KEY, String(items.length));
+            localStorage.removeItem(cursorKey);
+            localStorage.removeItem(LOCAL_HISTORY_KEY);
+            console.log(`[migrate] moved ${items.length} local history rows to Supabase`);
+        } catch (err) {
+            console.error('[migrate] paused, resumes next load:', err);
         }
-        localStorage.setItem(MIGRATED_KEY, String(items.length));
-        localStorage.removeItem(LOCAL_HISTORY_KEY);
-        console.log(`[migrate] moved ${items.length} local history rows to Supabase`);
-    } catch (err) {
-        console.error('[migrate] failed, will retry next load:', err);
-        migrationStarted = false;
-    }
+    })();
+    return migrationPromise;
 }
 
 function saveHistory(items) {
@@ -233,26 +247,56 @@ export async function apiGet(path, options = {}) {
     // 线上：先走 Supabase RPC
     if (rpcAvailable() && rpcConfig()) {
         try {
-            migrateLocalHistory();
+            // 读列表前先把老记录搬完，否则页面会先闪一个空列表
+            await migrateLocalHistory();
             const url0 = parseUrl(path);
             const limit0 = url0 ? parseInt(url0.searchParams.get('limit') || '20', 10) : 20;
             if (path.startsWith('/api/history/list')) {
                 const r = await rpcCall('draw_list', { p: { cid: clientId, limit: limit0 } });
                 if (onStatusChange) onStatusChange('API 已连接');
-                if (r && r.ok) return { ok: true, items: r.items || [] };
+                if (r && r.ok) {
+                    let items = r.items || [];
+                    // 数据库还没有但本地有老记录（迁移没跑完）：先用本地数据顶着
+                    if (!items.length) {
+                        const localItems = loadHistory();
+                        if (localItems.length && localStorage.getItem(MIGRATED_KEY) === null) {
+                            items = localItems
+                                .slice()
+                                .sort((a, b) => (b.id || 0) - (a.id || 0))
+                                .slice(0, limit0);
+                        }
+                    }
+                    return { ok: true, items };
+                }
             }
             if (path.startsWith('/api/history/recent')) {
                 const r = await rpcCall('draw_list', { p: { cid: clientId, limit: limit0 } });
                 if (onStatusChange) onStatusChange('API 已连接');
                 if (r && r.ok) {
-                    return { ok: true, ids: (r.items || []).map((i) => i.rule_id).filter(Boolean) };
+                    let items = r.items || [];
+                    if (!items.length) {
+                        const localItems = loadHistory();
+                        if (localItems.length && localStorage.getItem(MIGRATED_KEY) === null) {
+                            items = localItems
+                                .slice()
+                                .sort((a, b) => (b.id || 0) - (a.id || 0))
+                                .slice(0, limit0);
+                        }
+                    }
+                    return { ok: true, ids: items.map((i) => i.rule_id).filter(Boolean) };
                 }
             }
             if (path.startsWith('/api/history/stats')) {
                 const r = await rpcCall('draw_list', { p: { cid: clientId, limit: 100 } });
                 if (onStatusChange) onStatusChange('API 已连接');
                 if (r && r.ok) {
-                    const items = r.items || [];
+                    let items = r.items || [];
+                    if (!items.length) {
+                        const localItems = loadHistory();
+                        if (localItems.length && localStorage.getItem(MIGRATED_KEY) === null) {
+                            items = localItems.slice().sort((a, b) => (b.id || 0) - (a.id || 0));
+                        }
+                    }
                     const byCategory = {};
                     const today = new Date().toISOString().slice(0, 10);
                     let todayCount = 0;

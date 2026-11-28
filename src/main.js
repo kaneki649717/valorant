@@ -7,6 +7,7 @@ import { Store } from './core/Store.js';
 import { GlitchText } from './components/GlitchText.js';
 import {
     categoryMap,
+    clientId,
     probePerformance,
     lowPerf
 } from './config.js';
@@ -627,14 +628,24 @@ async function initApp() {
         refreshRecentIds();
         setListCategory('all');
         console.log('[Init] 鍒濆鐘舵€佽缃畬鎴愶紝寮€濮嬫覆鏌撳垪琛?..');
-        renderList(); // 鐩存帴璋冪敤娓叉煋锛屼笉绛夊緟API
-        console.log('[Init] 鍒楄〃娓叉煋瀹屾垚锛屽紑濮嬫洿鏂伴潰鏉?..');
-        await updatePanels();
-        console.log('[Init] 闈㈡澘鏇存柊瀹屾垚');
+        renderList(); // 直接调用渲染，不等待API
 
-        setTimeout(() => {
-            spawnDataStream(elements.resultStage, store);
-        }, 500);
+        // 首屏先用 localStorage 缓存渲染，不等网络
+        try {
+            const cachedRaw = localStorage.getItem(`vp_history_${clientId}`);
+            if (cachedRaw) {
+                const cached = JSON.parse(cachedRaw);
+                if (Array.isArray(cached) && cached.length) {
+                    renderHistory(cached.slice().sort((a, b) => (b.id || 0) - (a.id || 0)).slice(0, 8));
+                }
+            }
+        } catch (e) {}
+        // 进场动画不等网络：先出效果，面板数据后台补
+        spawnDataStream(elements.resultStage, store);
+
+        updatePanels().then(() => {
+            console.log('[Init] 面板更新完成');
+        });
 
     } catch (err) {
         console.error('[Init] 鍒濆鍖栧け璐?', err);

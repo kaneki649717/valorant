@@ -87,6 +87,7 @@ async function migrateLocalHistory() {
                             rule_id: it.rule_id,
                             content: it.content,
                             category: it.category,
+                            timestamp: it.timestamp,
                         },
                     });
                 }
@@ -247,16 +248,25 @@ export async function apiGet(path, options = {}) {
     // 线上：先走 Supabase RPC
     if (rpcAvailable() && rpcConfig()) {
         try {
-            // 读列表前先把老记录搬完，否则页面会先闪一个空列表
-            await migrateLocalHistory();
+            // 迁移放后台跑，不阻塞首屏；读列表时本地有老记录就先用本地
+            migrateLocalHistory();
             const url0 = parseUrl(path);
             const limit0 = url0 ? parseInt(url0.searchParams.get('limit') || '20', 10) : 20;
             if (path.startsWith('/api/history/list')) {
+                const pendingLocal = loadHistory();
+                const needLocal = pendingLocal.length
+                    && localStorage.getItem(MIGRATED_KEY) === null;
+                if (needLocal) {
+                    if (onStatusChange) onStatusChange('API 已连接');
+                    return {
+                        ok: true,
+                        items: pendingLocal.slice().sort((a, b) => (b.id || 0) - (a.id || 0)).slice(0, limit0),
+                    };
+                }
                 const r = await rpcCall('draw_list', { p: { cid: clientId, limit: limit0 } });
                 if (onStatusChange) onStatusChange('API 已连接');
                 if (r && r.ok) {
                     let items = r.items || [];
-                    // 数据库还没有但本地有老记录（迁移没跑完）：先用本地数据顶着
                     if (!items.length) {
                         const localItems = loadHistory();
                         if (localItems.length && localStorage.getItem(MIGRATED_KEY) === null) {
@@ -270,6 +280,19 @@ export async function apiGet(path, options = {}) {
                 }
             }
             if (path.startsWith('/api/history/recent')) {
+                const pendingLocal = loadHistory();
+                if (pendingLocal.length && localStorage.getItem(MIGRATED_KEY) === null) {
+                    if (onStatusChange) onStatusChange('API 已连接');
+                    return {
+                        ok: true,
+                        ids: pendingLocal
+                            .slice()
+                            .sort((a, b) => (b.id || 0) - (a.id || 0))
+                            .slice(0, limit0)
+                            .map((r) => r.rule_id)
+                            .filter(Boolean),
+                    };
+                }
                 const r = await rpcCall('draw_list', { p: { cid: clientId, limit: limit0 } });
                 if (onStatusChange) onStatusChange('API 已连接');
                 if (r && r.ok) {
@@ -287,6 +310,25 @@ export async function apiGet(path, options = {}) {
                 }
             }
             if (path.startsWith('/api/history/stats')) {
+                const pendingLocal = loadHistory();
+                if (pendingLocal.length && localStorage.getItem(MIGRATED_KEY) === null) {
+                    if (onStatusChange) onStatusChange('API 已连接');
+                    const byCategory = {};
+                    let todayCount = 0;
+                    const today = new Date().toISOString().slice(0, 10);
+                    pendingLocal.forEach((it) => {
+                        if (it.timestamp && it.timestamp.startsWith(today)) todayCount += 1;
+                        if (it.category) byCategory[it.category] = (byCategory[it.category] || 0) + 1;
+                    });
+                    const total = Object.values(byCategory).reduce((a, b) => a + b, 0);
+                    let topCategory = null;
+                    let topPct = 0;
+                    if (total > 0) {
+                        topCategory = Object.keys(byCategory).sort((a, b) => byCategory[b] - byCategory[a])[0];
+                        topPct = Math.round((byCategory[topCategory] / total) * 100);
+                    }
+                    return { ok: true, today_count: todayCount, by_category: byCategory, top_category: topCategory, top_pct: topPct };
+                }
                 const r = await rpcCall('draw_list', { p: { cid: clientId, limit: 100 } });
                 if (onStatusChange) onStatusChange('API 已连接');
                 if (r && r.ok) {

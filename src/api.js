@@ -203,19 +203,19 @@ export async function apiGet(path, options = {}) {
             const url0 = parseUrl(path);
             const limit0 = url0 ? parseInt(url0.searchParams.get('limit') || '20', 10) : 20;
             if (path.startsWith('/api/history/list')) {
-                const r = await rpcCall('draw_list', { cid: clientId, limit: limit0 });
+                const r = await rpcCall('draw_list', { p: { cid: clientId, limit: limit0 } });
                 if (onStatusChange) onStatusChange('API 已连接');
                 if (r && r.ok) return { ok: true, items: r.items || [] };
             }
             if (path.startsWith('/api/history/recent')) {
-                const r = await rpcCall('draw_list', { cid: clientId, limit: limit0 });
+                const r = await rpcCall('draw_list', { p: { cid: clientId, limit: limit0 } });
                 if (onStatusChange) onStatusChange('API 已连接');
                 if (r && r.ok) {
                     return { ok: true, ids: (r.items || []).map((i) => i.rule_id).filter(Boolean) };
                 }
             }
             if (path.startsWith('/api/history/stats')) {
-                const r = await rpcCall('draw_list', { cid: clientId, limit: 100 });
+                const r = await rpcCall('draw_list', { p: { cid: clientId, limit: 100 } });
                 if (onStatusChange) onStatusChange('API 已连接');
                 if (r && r.ok) {
                     const items = r.items || [];
@@ -277,12 +277,12 @@ export async function apiPost(path, payload, options = {}) {
     if (rpcAvailable() && rpcConfig()) {
         try {
             if (path.startsWith('/api/history/add')) {
-                const r = await rpcCall('draw_add', {
+                const r = await rpcCall('draw_add', { p: {
                     cid: clientId,
                     rule_id: payload && payload.id,
                     content: payload && payload.content,
                     category: payload && payload.category,
-                });
+                } });
                 if (onStatusChange) onStatusChange('API 已连接');
                 if (r && r.ok) {
                     return {
@@ -300,10 +300,10 @@ export async function apiPost(path, payload, options = {}) {
             }
             if (path.startsWith('/api/history/undo')) {
                 const ids = payload && payload.ids;
-                const r = await rpcCall('draw_undo', {
+                const r = await rpcCall('draw_undo', { p: {
                     cid: clientId,
                     ids: Array.isArray(ids) ? ids : null,
-                });
+                } });
                 if (onStatusChange) onStatusChange('API 已连接');
                 if (r && r.ok) return { ok: true, deleted_count: r.deleted || 0 };
             }
